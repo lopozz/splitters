@@ -1,1 +1,5 @@
 .splitters/
+.ruff_cache/
+.pytest_cache
+__pycache__/
+splitters.egg-info/
