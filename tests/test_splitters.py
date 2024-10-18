@@ -1,96 +1,127 @@
-import os
-import sys
-import pytest
 from transformers import AutoTokenizer
-
 from splitters.span_processor import SpanProcessor
 
 
-# Sample input data for testing
-SAMPLE_TEXT = "This is a test sentence. Here is another sentence."
-TOKENIZED_TEXT = ["This", "is", "a", "test", "sentence", ".", "Here", "is", "another", "sentence", "."]
-TOKEN_IDS = list(range(len(TOKENIZED_TEXT)))  # Mock token IDs
+class TestSpanProcesor:
+    span_processor = SpanProcessor(
+        AutoTokenizer.from_pretrained("microsoft/deberta-v3-small", use_fast=False), "a"
+    )
 
-# @pytest.fixture
-# def mock_tokenizer():
-#     """Fixture to create a mock tokenizer."""
-#     tokenizer = MagicMock()
-#     tokenizer.tokenize.return_value = TOKENIZED_TEXT
-#     tokenizer.convert_tokens_to_ids.return_value = TOKEN_IDS
-#     tokenizer.convert_ids_to_tokens.return_value = TOKENIZED_TEXT
-#     tokenizer.convert_tokens_to_string.return_value = SAMPLE_TEXT
-#     tokenizer.unk_token = None
-#     tokenizer.pad_token = None
-#     return tokenizer
+    def test_whitespace_sent_divider_by_char_long_sent(self):
+        """Test that the whitespace sent divider splits the text correctly."""
+        text = "This is a long text with many words that should be split properly."
+        max_len = 20
+        result = self.span_processor.whitespace_sent_divider_by_char(text, max_len)
+        print(result)
 
-# @pytest.fixture
-# def span_processor(mock_tokenizer):
-#     """Fixture to create the SpanProcessor object with a mock tokenizer."""
-#     return SpanProcessor(tokenizer=mock_tokenizer)
+        assert isinstance(result, list)
+        assert len(result) == 4
+        assert [chunck["start"] for chunck in result] == [0, 20, 36, 51]
+        assert [chunck["end"] for chunck in result] == [19, 35, 50, 66]
+        assert all(isinstance(chunk, dict) for chunk in result)
+        assert all(
+            "text" in chunk and "start" in chunk and "end" in chunk for chunk in result
+        )
 
-# class TestSpanProcesor:
-#     data_processor = SpanProcessor(AutoTokenizer.from_pretrained('microsoft/deberta-v3-small'), 'a')
+    def test_whitespace_sent_divider_by_char_short_sent(self):
+        """Test that the whitespace return the entire sentence."""
+        text = "This is a short text."
+        max_len = 200
+        result = self.span_processor.whitespace_sent_divider_by_char(text, max_len)
 
-#     def test_whitespace_sent_divider_by_char(self):
-#         """Test that the whitespace sent divider splits the text correctly."""
-#         text = "This is a long text with many words that should be split properly."
-#         max_len = 20
-#         result = self.data_processor.whitespace_sent_divider_by_char(text, max_len)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["text"] == text
+        assert [chunck["start"] for chunck in result] == [0]
+        assert [chunck["end"] for chunck in result] == [21]
+        assert all(isinstance(chunk, dict) for chunk in result)
+        assert all(
+            "text" in chunk and "start" in chunk and "end" in chunk for chunk in result
+        )
 
-#         assert isinstance(result, list)
-#         assert len(result) > 0
-#         assert all(isinstance(chunk, dict) for chunk in result)
-#         assert all("text" in chunk and "start" in chunk and "end" in chunk for chunk in result)
+    def test_sent_divider_by_token_long_sent(self):
+        """Test that sent_divider_by_token correctly splits tokens."""
+        text = "This is a long text with many words that should be split properly."
+        max_len = 5
+        result = self.span_processor.sent_divider_by_token(text, max_len)
 
-    # def test_sent_divider_by_token(self, span_processor, mock_tokenizer):
-    #     """Test that sent_divider_by_token correctly splits tokens."""
-    #     text = SAMPLE_TEXT
-    #     max_len = 5
-    #     result = span_processor.sent_divider_by_token(text, max_len)
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert [chunck["start"] for chunck in result] == [0, 5, 10]
+        assert [chunck["end"] for chunck in result] == [4, 9, 13]
+        assert all(isinstance(chunk, dict) for chunk in result)
+        assert all(
+            "text" in chunk and "start" in chunk and "end" in chunk for chunk in result
+        )
 
-    #     assert isinstance(result, list)
-    #     assert len(result) > 0
-    #     assert all(isinstance(chunk, dict) for chunk in result)
-    #     assert all("text" in chunk and "start" in chunk and "end" in chunk for chunk in result)
+    def test_sent_divider_by_token_short_sent(self):
+        """Test that sent_divider_by_token correctly splits tokens."""
+        text = "This is a short text."
+        max_len = 200
+        result = self.span_processor.sent_divider_by_token(text, max_len)
 
-    # def test_spacy_sent_divider_it(self, mocker, span_processor):
-    #     """Test that the spacy_sent_divider_it method returns the correct spans."""
-    #     mock_nlp = mocker.patch("spacy.load")
-    #     mock_doc = MagicMock()
-        
-    #     # Mock the sents for SpaCy
-    #     mock_sent_1 = MagicMock()
-    #     mock_sent_1.text = "This is a sentence."
-    #     mock_sent_1.start_char = 0
-    #     mock_sent_1.end_char = 18
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["text"] == text
+        assert [chunck["start"] for chunck in result] == [0]
+        assert [chunck["end"] for chunck in result] == [5]
+        assert all(isinstance(chunk, dict) for chunk in result)
+        assert all(
+            "text" in chunk and "start" in chunk and "end" in chunk for chunk in result
+        )
 
-    #     mock_sent_2 = MagicMock()
-    #     mock_sent_2.text = "Here is another."
-    #     mock_sent_2.start_char = 19
-    #     mock_sent_2.end_char = 33
+    def test_spacy_sent_divider(self):
+        """Test that the spacy_sent_divider_it method returns the correct spans."""
 
-    #     mock_doc.sents = [mock_sent_1, mock_sent_2]
-    #     mock_nlp.return_value = mock_doc
+        text = "This is a sentence. Here is another."
+        result = self.span_processor.spacy_sent_divider(text)
 
-    #     text = "This is a sentence. Here is another."
-    #     result = span_processor.spacy_sent_divider_it(text)
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0]["text"] == "This is a sentence."
+        assert result[1]["text"] == "Here is another."
 
-    #     assert isinstance(result, list)
-    #     assert len(result) == 2
-    #     assert result[0]["text"] == "This is a sentence."
-    #     assert result[1]["text"] == "Here is another."
+    def test_token_split_by_max_len_2_split(self):
+        """Test the token_split_by_max_len method."""
+        text = "This is a test sentence. Here is another sentence."
+        max_len = 10
+        result = self.span_processor.token_split_by_max_len(text, max_len)
 
-    # def test_token_split_by_max_len(self, span_processor, mock_tokenizer):
-    #     """Test the token_split_by_max_len method."""
-    #     text = SAMPLE_TEXT
-    #     max_len = 5
-    #     result = span_processor.token_split_by_max_len(text, max_len)
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert [chunck["start"] for chunck in result] == [0, 25]
+        assert [chunck["end"] for chunck in result] == [24, 50]
+        assert all(isinstance(chunk, dict) for chunk in result)
+        assert all(
+            "text" in chunk and "start" in chunk and "end" in chunk for chunk in result
+        )
 
-    #     assert isinstance(result, list)
-    #     assert len(result) > 0
-    #     assert all(isinstance(chunk, dict) for chunk in result)
-    #     assert all("text" in chunk and "start" in chunk and "end" in chunk for chunk in result)
-    #     # Check that no chunk exceeds max_len tokens
-    #     for chunk in result:
-    #         token_count = len(mock_tokenizer.tokenize(chunk["text"]))
-    #         assert token_count <= max_len
+    def test_token_split_by_max_len_no_split(self):
+        """Test the token_split_by_max_len method."""
+        text = "This is a test sentence. Here is another sentence."
+        max_len = 100
+        result = self.span_processor.token_split_by_max_len(text, max_len)
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert [chunck["start"] for chunck in result] == [0]
+        assert [chunck["end"] for chunck in result] == [50]
+        assert all(isinstance(chunk, dict) for chunk in result)
+        assert all(
+            "text" in chunk and "start" in chunk and "end" in chunk for chunk in result
+        )
+
+    def test_token_split_by_max_len_low_max_len(self):
+        """Test the token_split_by_max_len method."""
+        text = "This is a test sentence. Here is another sentence."
+        max_len = 4
+        result = self.span_processor.token_split_by_max_len(text, max_len)
+
+        assert isinstance(result, list)
+        assert len(result) == 4
+        assert [chunck["start"] for chunck in result] == [0, 15, 25, 50]
+        assert [chunck["end"] for chunck in result] == [13, 23, 48, 50]
+        assert all(isinstance(chunk, dict) for chunk in result)
+        assert all(
+            "text" in chunk and "start" in chunk and "end" in chunk for chunk in result
+        )
